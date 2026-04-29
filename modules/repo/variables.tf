@@ -37,3 +37,20 @@ variable "ruleset_name" {
   type        = string
   default     = "default-branch-protection"
 }
+
+variable "bypass_actors" {
+  description = <<-EOT
+    Actors permitted to bypass the ruleset. Each entry needs:
+      - actor_id: numeric ID (for built-in repo roles: 1=read, 2=triage,
+        3=write, 4=maintain, 5=admin)
+      - actor_type: one of RepositoryRole, Team, Integration,
+        OrganizationAdmin, DeployKey
+      - bypass_mode: "always" or "pull_request"
+  EOT
+  type = list(object({
+    actor_id    = number
+    actor_type  = string
+    bypass_mode = string
+  }))
+  default = []
+}

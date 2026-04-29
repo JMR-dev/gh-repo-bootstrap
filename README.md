@@ -30,6 +30,10 @@ gh repo-bootstrap JMR-dev/api \
   --reviews 2 --signed \
   --env production --env staging --env preview
 
+# Solo maintainer: allow the Admin role (you) to bypass the ruleset
+# so you can merge your own PRs without a second approver:
+gh repo-bootstrap JMR-dev/solo-project --solo
+
 # Plan only:
 gh repo-bootstrap JMR-dev/my-app --plan
 

@@ -20,6 +20,28 @@ protection + environments on a repo that already exists.
 | `require_signed_commits` | bool | `false` | Enforce signed commits |
 | `environments` | list(string) | `[]` | Environments to ensure exist |
 | `ruleset_name` | string | `"default-branch-protection"` | Ruleset name |
+| `bypass_actors` | list(object) | `[]` | Actors allowed to bypass the ruleset (see below) |
+
+### `bypass_actors`
+
+Each entry is an object:
+
+```hcl
+{
+  actor_id    = 5                # numeric (built-in roles: 1=read 2=triage 3=write 4=maintain 5=admin)
+  actor_type  = "RepositoryRole" # RepositoryRole | Team | Integration | OrganizationAdmin | DeployKey
+  bypass_mode = "always"         # "always" or "pull_request"
+}
+```
+
+Most useful entry for solo maintainers:
+
+```hcl
+{ actor_id = 5, actor_type = "RepositoryRole", bypass_mode = "always" }
+```
+
+…which lets the repo Admin (you) merge your own PRs even though
+`required_reviews >= 1`.
 
 ## Provider
 

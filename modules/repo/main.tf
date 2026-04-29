@@ -15,6 +15,15 @@ resource "github_repository_ruleset" "default_branch" {
     }
   }
 
+  dynamic "bypass_actors" {
+    for_each = var.bypass_actors
+    content {
+      actor_id    = bypass_actors.value.actor_id
+      actor_type  = bypass_actors.value.actor_type
+      bypass_mode = bypass_actors.value.bypass_mode
+    }
+  }
+
   rules {
     deletion            = true
     non_fast_forward    = true
