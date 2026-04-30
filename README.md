@@ -41,6 +41,50 @@ gh repo-bootstrap JMR-dev/my-app --plan
 gh repo-bootstrap JMR-dev/my-app --destroy
 ```
 
+### Uploading GitHub Actions secrets
+
+The extension can also upload Actions secrets — both repository-level
+and per-environment — sourced from tfvars-style files:
+
+```sh
+# Repo-level:
+cat > repo.secrets.tfvars <<'EOF'
+API_TOKEN      = "ghp_..."
+WEBHOOK_SECRET = "s3kr3t"
+EOF
+gh repo-bootstrap JMR-dev/my-app --upload-repo-secrets ./repo.secrets.tfvars
+
+# Per-environment: one <env>.tfvars per env in a directory.
+mkdir env-secrets
+cat > env-secrets/production.tfvars <<'EOF'
+DB_PASSWORD = "prodpw"
+EOF
+cat > env-secrets/staging.tfvars <<'EOF'
+DB_PASSWORD = "stagepw"
+EOF
+gh repo-bootstrap JMR-dev/my-app \
+  --env production --env staging \
+  --upload-env-secrets ./env-secrets
+```
+
+Each line in a tfvars file must be `NAME = "value"`. Names follow
+GitHub's rules (alphanumerics + underscore, no leading digit, no
+`GITHUB_` prefix). `#` and `//` comments are supported.
+
+Each parsed secret is materialized as its own
+`variable "..." { sensitive = true }` plus matching
+`github_actions_secret` / `github_actions_environment_secret`
+resource in the generated wrapper, so values stay sensitive
+throughout the plan and never appear in plan output. The
+intermediate tfvars file the script feeds to OpenTofu is written
+to a `chmod 700` directory under `/dev/shm` (when available) and
+deleted on exit via a trap.
+
+> **State warning.** GitHub stores secrets encrypted, but the
+> OpenTofu state file written to `--state-dir` contains the
+> plaintext values. Protect that directory and consider a remote
+> backend with state encryption for anything beyond local use.
+
 State is kept per-repo under `$XDG_STATE_HOME/gh-repo-bootstrap/<owner>__<repo>/`
 (default `~/.local/state/gh-repo-bootstrap/...`). Override with `--state-dir`.
 

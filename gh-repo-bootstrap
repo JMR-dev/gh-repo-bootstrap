@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# gh-extension entrypoint shim.
+#
+# `gh` requires the executable be named exactly `gh-<name>` (no
+# file extension), but the canonical script is named with a `.sh`
+# suffix for shell-tooling friendliness. This shim simply execs it.
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$DIR/gh-repo-bootstrap.sh" "$@"

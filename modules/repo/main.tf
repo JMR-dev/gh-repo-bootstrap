@@ -44,3 +44,4 @@ resource "github_repository_environment" "envs" {
   repository  = data.github_repository.this.name
   environment = each.value
 }
+

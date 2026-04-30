@@ -12,3 +12,13 @@ output "environments" {
   value       = sort([for e in github_repository_environment.envs : e.environment])
   description = "Environments managed by this configuration."
 }
+
+output "environments_by_name" {
+  value       = github_repository_environment.envs
+  description = "Map of environment name => github_repository_environment resource, exported so callers can express dependencies on a specific env (e.g. environment-scoped secrets)."
+}
+
+output "repository_name" {
+  value       = data.github_repository.this.name
+  description = "Repository short name (without owner)."
+}
