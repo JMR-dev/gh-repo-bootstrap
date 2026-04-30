@@ -15,9 +15,21 @@ for applying a standard set of guard-rails to a GitHub repository:
 gh extension install JMR-dev/gh-repo-bootstrap
 ```
 
+`gh` will fetch a precompiled binary for your OS/arch from the latest
+release (Linux, macOS, Windows; amd64 + arm64).
+
 You also need:
 - [`tofu`](https://opentofu.org/docs/intro/install/) on PATH
 - `gh` already authenticated (`gh auth login`)
+
+### Build from source
+
+```sh
+git clone https://github.com/JMR-dev/gh-repo-bootstrap
+cd gh-repo-bootstrap
+go build -o gh-repo-bootstrap .
+gh extension install .
+```
 
 ## Use (gh extension)
 

@@ -17,3 +17,8 @@ terraform.tfvars
 .DS_Store
 .idea/
 .vscode/
+
+# Go build output (the gh extension binary)
+/gh-repo-bootstrap
+/gh-repo-bootstrap.exe
+/dist/
