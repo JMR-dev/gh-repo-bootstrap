@@ -1,17 +1,5 @@
-# OpenTofu / Terraform
-*.tfstate
-*.tfstate.*
-*.tfstate.backup
-.terraform/
-.terraform.lock.hcl.bak
-crash.log
-crash.*.log
-
-# User-specific configs (may contain secrets)
-backend.hcl
-*.auto.tfvars
-terraform.tfvars
-!terraform.tfvars.example
+# Pulumi
+gh-repo-bootstrap
 
 # Editors / OS
 .DS_Store
