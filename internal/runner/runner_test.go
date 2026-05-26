@@ -40,35 +40,59 @@ func TestHelperProcess(t *testing.T) {
 	}
 
 	command := args[0]
-	if command != "gh" {
-		fmt.Fprintf(os.Stderr, "expected 'gh', got: %s\n", command)
-		os.Exit(2)
-	}
-
-	subCmd := args[1]
-	switch subCmd {
-	case "auth":
-		if len(args) >= 3 && args[2] == "token" {
-			fmt.Print("gh_mock_token\n")
-		} else {
-			fmt.Fprintf(os.Stderr, "unknown auth subcommand\n")
-			os.Exit(2)
-		}
-	case "api":
-		if len(args) >= 3 {
-			path := args[2]
-			switch {
-			case path == "users/octocat":
-				fmt.Print(`{"id":583234}`)
-			case path == "orgs/JMR-dev/teams/release":
-				fmt.Print(`{"id":98765}`)
-			default:
-				fmt.Fprintf(os.Stderr, "unknown path: %s\n", path)
+	switch command {
+	case "gh":
+		subCmd := args[1]
+		switch subCmd {
+		case "auth":
+			if len(args) >= 3 && args[2] == "token" {
+				fmt.Print("gh_mock_token\n")
+			} else {
+				fmt.Fprintf(os.Stderr, "unknown auth subcommand\n")
 				os.Exit(2)
 			}
+		case "api":
+			if len(args) >= 3 {
+				path := args[2]
+				switch {
+				case path == "users/octocat":
+					fmt.Print(`{"id":583234}`)
+				case path == "orgs/JMR-dev/teams/release":
+					fmt.Print(`{"id":98765}`)
+				default:
+					fmt.Fprintf(os.Stderr, "unknown path: %s\n", path)
+					os.Exit(2)
+				}
+			}
+		default:
+			fmt.Fprintf(os.Stderr, "unknown gh command: %s\n", subCmd)
+			os.Exit(2)
+		}
+	case "git":
+		if os.Getenv("MOCK_GIT_ENABLED") != "1" {
+			fmt.Fprintf(os.Stderr, "git not mocked in this test\n")
+			os.Exit(2)
+		}
+		subCmd := args[1]
+		switch subCmd {
+		case "rev-parse":
+			// success — we're in a mock git repo
+		case "remote":
+			if len(args) >= 3 && args[2] == "get-url" {
+				// Simulate "no origin" by default; set MOCK_GIT_ORIGIN_EXISTS=1 to override.
+				if os.Getenv("MOCK_GIT_ORIGIN_EXISTS") != "1" {
+					os.Exit(1)
+				}
+			}
+			// add / set-url: exit 0 (success)
+		case "push":
+			// success
+		default:
+			fmt.Fprintf(os.Stderr, "unknown git subcommand: %s\n", subCmd)
+			os.Exit(2)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", subCmd)
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n", command)
 		os.Exit(2)
 	}
 }
@@ -79,6 +103,24 @@ func mockExec(command string, args ...string) *exec.Cmd {
 	cmd := exec.Command(os.Args[0], cs...)
 	cmd.Env = append(os.Environ(), "GO_WANT_HELPER_PROCESS=1")
 	return cmd
+}
+
+// mockExecWithGit is like mockExec but also enables the git mock.
+func mockExecWithGit(command string, args ...string) *exec.Cmd {
+	cs := []string{"-test.run=TestHelperProcess", "--", command}
+	cs = append(cs, args...)
+	cmd := exec.Command(os.Args[0], cs...)
+	cmd.Env = append(os.Environ(), "GO_WANT_HELPER_PROCESS=1", "MOCK_GIT_ENABLED=1")
+	return cmd
+}
+
+// makeRecordingExec wraps a delegate exec function and records every call.
+func makeRecordingExec(delegate func(string, ...string) *exec.Cmd) (func(string, ...string) *exec.Cmd, *[][]string) {
+	calls := &[][]string{}
+	return func(name string, args ...string) *exec.Cmd {
+		*calls = append(*calls, append([]string{name}, args...))
+		return delegate(name, args...)
+	}, calls
 }
 
 // mockStack implements stackInterface.
@@ -447,5 +489,116 @@ func TestRun_CreateModeInteractive(t *testing.T) {
 	}
 	if opts.RepoSettings.Description == nil || *opts.RepoSettings.Description != "my repo description" {
 		t.Errorf("expected Description to be 'my repo description', got: %v", opts.RepoSettings.Description)
+	}
+}
+
+func TestRun_CreateMode_SetsRemoteAndPushes(t *testing.T) {
+	oldExec := execCommand
+	oldGithubExec := githubapi.ExecCommand
+	oldUpsert := upsertStack
+	defer func() {
+		execCommand = oldExec
+		githubapi.ExecCommand = oldGithubExec
+		upsertStack = oldUpsert
+	}()
+
+	githubapi.ExecCommand = mockExec
+
+	recorder, calls := makeRecordingExec(mockExecWithGit)
+	execCommand = recorder
+
+	mStack := &mockStack{setConfigCalls: make(map[string]string)}
+	upsertStack = func(ctx context.Context, stackName, projectName string, program pulumi.RunFunc, opts ...auto.LocalWorkspaceOption) (stackInterface, error) {
+		return mStack, nil
+	}
+
+	stateDir := t.TempDir()
+	oldToken := os.Getenv("GITHUB_TOKEN")
+	os.Setenv("GITHUB_TOKEN", "test-token")
+	defer os.Setenv("GITHUB_TOKEN", oldToken)
+
+	desc := "test repo"
+	opts := &cli.Options{
+		Owner:    "JMR-dev",
+		Repo:     "new-repo",
+		Branch:   "main",
+		Action:   cli.ActionApply,
+		RepoMode: cli.RepoModeCreate,
+		StateDir: stateDir,
+		RepoSettings: cli.RepoSettings{
+			Visibility:  "private",
+			Description: &desc,
+		},
+	}
+
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify the expected git command sequence was issued.
+	wantRemoteURL := "https://github.com/JMR-dev/new-repo.git"
+	checkCmd := func(want []string) {
+		t.Helper()
+		for _, c := range *calls {
+			if len(c) == len(want) {
+				match := true
+				for i := range want {
+					if c[i] != want[i] {
+						match = false
+						break
+					}
+				}
+				if match {
+					return
+				}
+			}
+		}
+		t.Errorf("expected command %v not found in recorded calls: %v", want, *calls)
+	}
+
+	checkCmd([]string{"git", "rev-parse", "--is-inside-work-tree"})
+	checkCmd([]string{"git", "remote", "get-url", "origin"})
+	checkCmd([]string{"git", "remote", "add", "origin", wantRemoteURL})
+	checkCmd([]string{"git", "push", "-u", "origin", "HEAD"})
+}
+
+func TestRun_NonCreateMode_NoRemoteSetup(t *testing.T) {
+	oldExec := execCommand
+	oldUpsert := upsertStack
+	defer func() {
+		execCommand = oldExec
+		upsertStack = oldUpsert
+	}()
+
+	recorder, calls := makeRecordingExec(mockExec)
+	execCommand = recorder
+
+	mStack := &mockStack{setConfigCalls: make(map[string]string)}
+	upsertStack = func(ctx context.Context, stackName, projectName string, program pulumi.RunFunc, opts ...auto.LocalWorkspaceOption) (stackInterface, error) {
+		return mStack, nil
+	}
+
+	stateDir := t.TempDir()
+	oldToken := os.Getenv("GITHUB_TOKEN")
+	os.Setenv("GITHUB_TOKEN", "test-token")
+	defer os.Setenv("GITHUB_TOKEN", oldToken)
+
+	opts := &cli.Options{
+		Owner:    "JMR-dev",
+		Repo:     "existing-repo",
+		Branch:   "main",
+		Action:   cli.ActionApply,
+		RepoMode: cli.RepoModeData,
+		StateDir: stateDir,
+	}
+
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, c := range *calls {
+		if len(c) > 0 && c[0] == "git" {
+			t.Errorf("expected no git commands for non-create mode, got: %v", c)
+		}
 	}
 }
