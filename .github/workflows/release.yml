@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE26: 'true'
+
 jobs:
   build-debian:
     name: Build Debian 13
