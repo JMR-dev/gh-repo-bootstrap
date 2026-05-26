@@ -82,6 +82,11 @@ func Run(ctx context.Context, opts *cli.Options) error {
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {
 		return fmt.Errorf("creating state dir: %w", err)
 	}
+	absStateDir, err := filepath.Abs(stateDir)
+	if err != nil {
+		return fmt.Errorf("resolving state dir: %w", err)
+	}
+	stateDir = absStateDir
 
 	// --- Auth: prefer caller-supplied GITHUB_TOKEN, else borrow from gh ---
 	if os.Getenv("GITHUB_TOKEN") == "" {
