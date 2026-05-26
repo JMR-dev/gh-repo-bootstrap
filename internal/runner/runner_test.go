@@ -117,6 +117,63 @@ func (m *mockStack) Destroy(ctx context.Context, opts ...optdestroy.Option) (aut
 	return auto.DestroyResult{}, nil
 }
 
+// TestRun_RelativeStateDir verifies that a relative state_dir (e.g. "./state"
+// from a TOML config) does not cause a "state/state" double-path in the
+// file:// backend URL. Before the fix, upsertStack was called with a relative
+// file:// URL that Pulumi resolved against its WorkDir, producing the wrong path.
+func TestRun_RelativeStateDir(t *testing.T) {
+	oldExec := execCommand
+	oldGithubExec := githubapi.ExecCommand
+	oldUpsert := upsertStack
+	execCommand = mockExec
+	githubapi.ExecCommand = mockExec
+	defer func() {
+		execCommand = oldExec
+		githubapi.ExecCommand = oldGithubExec
+		upsertStack = oldUpsert
+	}()
+
+	// Capture the PULUMI_BACKEND_URL env var passed to upsertStack.
+	var capturedBackendURL string
+	mStack := &mockStack{setConfigCalls: make(map[string]string)}
+	upsertStack = func(ctx context.Context, stackName, projectName string, program pulumi.RunFunc, opts ...auto.LocalWorkspaceOption) (stackInterface, error) {
+		// Apply options to a scratch workspace to extract env vars.
+		ws, err := auto.NewLocalWorkspace(ctx, opts...)
+		if err == nil {
+			env := ws.GetEnvVars()
+			capturedBackendURL = env["PULUMI_BACKEND_URL"]
+		}
+		return mStack, nil
+	}
+
+	parent := t.TempDir()
+	oldWd, _ := os.Getwd()
+	_ = os.Chdir(parent)
+	defer os.Chdir(oldWd)
+
+	opts := &cli.Options{
+		Owner:        "JMR-dev",
+		Repo:         "test-repo",
+		Branch:       "main",
+		Action:       cli.ActionApply,
+		StateDir:     "./state",
+		Environments: []*cli.EnvSpec{{Name: "production"}},
+	}
+
+	oldToken := os.Getenv("GITHUB_TOKEN")
+	os.Setenv("GITHUB_TOKEN", "test-token")
+	defer os.Setenv("GITHUB_TOKEN", oldToken)
+
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "file://" + filepath.Join(parent, "state")
+	if capturedBackendURL != want {
+		t.Errorf("PULUMI_BACKEND_URL = %q, want %q", capturedBackendURL, want)
+	}
+}
+
 func TestRun_Apply(t *testing.T) {
 	oldExec := execCommand
 	oldGithubExec := githubapi.ExecCommand
