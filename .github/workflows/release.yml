@@ -5,12 +5,18 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for the release (e.g., v1.0.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE26: 'true'
+  RELEASE_TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
 
 jobs:
   build-debian:
@@ -142,7 +148,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ github.ref_name }}" \
+          gh release create "${{ env.RELEASE_TAG }}" \
+            --title "${{ env.RELEASE_TAG }}" \
             --notes-file release_notes.txt \
             release-assets/*
