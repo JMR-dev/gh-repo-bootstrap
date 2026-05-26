@@ -12,9 +12,11 @@ import (
 	"golang.org/x/term"
 )
 
+var IsTerminal = term.IsTerminal
+
 // IsInteractive reports whether stdin is a terminal.
 func IsInteractive() bool {
-	return term.IsTerminal(int(os.Stdin.Fd()))
+	return IsTerminal(int(os.Stdin.Fd()))
 }
 
 // Reader reads prompts from in and writes them to out. Use New() for the

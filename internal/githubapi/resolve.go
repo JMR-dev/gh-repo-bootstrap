@@ -78,9 +78,11 @@ func (r *Resolver) ResolveTeam(s string) (int, error) {
 	return id, nil
 }
 
+var ExecCommand = exec.Command
+
 // ghAPIID runs `gh api <path>` and returns the `.id` field of the response.
 func ghAPIID(path string) (int, error) {
-	cmd := exec.Command("gh", "api", path)
+	cmd := ExecCommand("gh", "api", path)
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
