@@ -208,7 +208,44 @@ func Run(ctx context.Context, opts *cli.Options) error {
 	default:
 		return fmt.Errorf("unknown action: %s", opts.Action)
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if opts.RepoMode == cli.RepoModeCreate && opts.Action == cli.ActionApply {
+		if err := setGitRemoteAndPush(opts.Owner, opts.Repo); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// setGitRemoteAndPush wires the newly created GitHub repo as the "origin"
+// remote of the current git working tree and pushes all local commits.
+// If the working directory is not inside a git repo the step is skipped.
+func setGitRemoteAndPush(owner, repo string) error {
+	if err := execCommand("git", "rev-parse", "--is-inside-work-tree").Run(); err != nil {
+		fmt.Println(">>> Not inside a git repository; skipping remote setup.")
+		return nil
+	}
+
+	remoteURL := fmt.Sprintf("https://github.com/%s/%s.git", owner, repo)
+	fmt.Printf(">>> Setting git remote origin → %s\n", remoteURL)
+
+	if execCommand("git", "remote", "get-url", "origin").Run() == nil {
+		if out, err := execCommand("git", "remote", "set-url", "origin", remoteURL).CombinedOutput(); err != nil {
+			return fmt.Errorf("updating git remote: %s: %w", strings.TrimSpace(string(out)), err)
+		}
+	} else {
+		if out, err := execCommand("git", "remote", "add", "origin", remoteURL).CombinedOutput(); err != nil {
+			return fmt.Errorf("adding git remote: %s: %w", strings.TrimSpace(string(out)), err)
+		}
+	}
+
+	fmt.Println(">>> Pushing local commits to origin...")
+	if out, err := execCommand("git", "push", "-u", "origin", "HEAD").CombinedOutput(); err != nil {
+		return fmt.Errorf("pushing to remote: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	return nil
 }
 
 // runCreatePrompts asks the user for any missing required --create values
