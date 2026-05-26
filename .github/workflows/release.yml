@@ -19,62 +19,49 @@ env:
   RELEASE_TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
 
 jobs:
-  build-debian:
-    name: Build Debian 13
+  build-linux-amd64:
+    name: Build Linux amd64
     runs-on: ubuntu-latest
-    container:
-      image: debian:13-slim
     steps:
-      - name: Install dependencies
-        run: |
-          apt-get update && apt-get install -y git golang-go ca-certificates
       - name: Checkout Code
         uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.3'
       - name: Build
-        run: go build -v -o gh-repo-bootstrap-linux-debian13-amd64 main.go
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        run: go build -v -o gh-repo-bootstrap-linux-amd64 main.go
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gh-repo-bootstrap-linux-debian13-amd64
-          path: gh-repo-bootstrap-linux-debian13-amd64
+          name: gh-repo-bootstrap-linux-amd64
+          path: gh-repo-bootstrap-linux-amd64
 
-  build-arch:
-    name: Build Arch Linux
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
+  build-linux-arm64:
+    name: Build Linux arm64
+    runs-on: ubuntu-24.04-arm
     steps:
-      - name: Install dependencies
-        run: |
-          pacman -Syu --noconfirm git go ca-certificates
       - name: Checkout Code
         uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.3'
       - name: Build
-        run: go build -v -o gh-repo-bootstrap-linux-arch-amd64 main.go
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: arm64
+        run: go build -v -o gh-repo-bootstrap-linux-arm64 main.go
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gh-repo-bootstrap-linux-arch-amd64
-          path: gh-repo-bootstrap-linux-arch-amd64
-
-  build-fedora:
-    name: Build Fedora 44
-    runs-on: ubuntu-latest
-    container:
-      image: fedora:44
-    steps:
-      - name: Install dependencies
-        run: |
-          dnf install -y git golang ca-certificates
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      - name: Build
-        run: go build -v -o gh-repo-bootstrap-linux-fedora44-amd64 main.go
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: gh-repo-bootstrap-linux-fedora44-amd64
-          path: gh-repo-bootstrap-linux-fedora44-amd64
+          name: gh-repo-bootstrap-linux-arm64
+          path: gh-repo-bootstrap-linux-arm64
 
   build-windows:
     name: Build Windows
@@ -114,7 +101,11 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-debian, build-arch, build-fedora, build-windows, build-macos]
+    needs:
+      - build-linux-amd64
+      - build-linux-arm64
+      - build-windows
+      - build-macos
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -131,7 +122,7 @@ jobs:
         run: |
           mkdir release-assets
           find bin-artifacts -type f -exec cp {} release-assets/ \;
-          
+
           cd release-assets
           echo "## SHA256 Checksums" > ../release_notes.txt
           echo "" >> ../release_notes.txt
@@ -141,7 +132,7 @@ jobs:
             sha=$(sha256sum "$file" | cut -d' ' -f1)
             echo "| \`$file\` | \`$sha\` |" >> ../release_notes.txt
           done
-          
+
           cat ../release_notes.txt
 
       - name: Create GitHub Release

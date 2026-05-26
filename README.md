@@ -29,7 +29,9 @@ gh extension install JMR-dev/gh-repo-bootstrap
 release. You also need:
 
 - [`pulumi`](https://www.pulumi.com/docs/iac/download-install/) on `PATH`
-- `gh` already authenticated (`gh auth login`)
+- `gh` already authenticated (`gh auth login`), or a `GITHUB_TOKEN`
+  exported in the environment — the extension uses `GITHUB_TOKEN`
+  when it is set and otherwise falls back to `gh auth token`
 
 ## Use
 
@@ -112,9 +114,11 @@ A single `--config FILE` can describe everything. When `--config`
 is used, **no other flags are allowed**:
 
 ```toml
-owner = "JMR-dev"
-name  = "my-new-app"
-mode  = "create"      # or "manage", or "data" (default)
+owner     = "JMR-dev"
+name      = "my-new-app"
+mode      = "create"   # or "manage", or "data" (default)
+action    = "apply"    # or "plan", or "destroy" (default: apply)
+state_dir = "./state"  # optional; overrides the default per-repo state dir
 
 [repo]
 visibility             = "private"
