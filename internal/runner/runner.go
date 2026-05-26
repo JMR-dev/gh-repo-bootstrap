@@ -26,12 +26,30 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/tokens"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/workspace"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
 const (
 	projectName = "gh-repo-bootstrap"
 	stackName   = "bootstrap"
 )
+
+var execCommand = exec.Command
+
+type stackInterface interface {
+	SetConfig(ctx context.Context, key string, val auto.ConfigValue) error
+	Up(ctx context.Context, opts ...optup.Option) (auto.UpResult, error)
+	Preview(ctx context.Context, opts ...optpreview.Option) (auto.PreviewResult, error)
+	Destroy(ctx context.Context, opts ...optdestroy.Option) (auto.DestroyResult, error)
+}
+
+var upsertStack = func(ctx context.Context, stackName, projectName string, program pulumi.RunFunc, opts ...auto.LocalWorkspaceOption) (stackInterface, error) {
+	s, err := auto.UpsertStackInlineSource(ctx, stackName, projectName, program, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
 
 // Run executes the requested action against the GitHub repo described by opts.
 func Run(ctx context.Context, opts *cli.Options) error {
@@ -67,7 +85,7 @@ func Run(ctx context.Context, opts *cli.Options) error {
 
 	// --- Auth: prefer caller-supplied GITHUB_TOKEN, else borrow from gh ---
 	if os.Getenv("GITHUB_TOKEN") == "" {
-		out, err := exec.Command("gh", "auth", "token").Output()
+		out, err := execCommand("gh", "auth", "token").Output()
 		if err != nil {
 			return fmt.Errorf("no GITHUB_TOKEN set and `gh auth token` failed; run `gh auth login` first")
 		}
@@ -158,7 +176,7 @@ func Run(ctx context.Context, opts *cli.Options) error {
 		fmt.Println(">>> Run with --plan first to review the import + any drift reconciliation.")
 	}
 
-	stack, err := auto.UpsertStackInlineSource(ctx, stackName, projectName, program,
+	stack, err := upsertStack(ctx, stackName, projectName, program,
 		auto.WorkDir(stateDir),
 		auto.EnvVars(map[string]string{
 			"PULUMI_BACKEND_URL":       backendURL,

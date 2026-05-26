@@ -1,7 +1,1 @@
-# Pulumi
-gh-repo-bootstrap
-
-# Editors / OS
-.DS_Store
-.idea/
-.vscode/
+coverage.out .gitignore
